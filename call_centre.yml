@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  InstanceName:
+    Type: String
+    Description: Name for the Amazon Connect instance
+  InboundPhoneNumber:
+    Type: String
+    Description: Phone number for inbound calls
+Resources:
+  MyConnectInstance:
+    Type: 'AWS::Connect::Instance'
+    Properties:
+      Name: { "Ref": "InstanceName" }
+      InboundCallsEnabled: true
+      OutboundCallsEnabled: true
+      InstanceAlias: { "Ref": "InstanceName" }
+      DirectoryId: "kapil"
+
+  MyPhoneNumber:
+    Type: 'AWS::Connect::PhoneNumber'
+    Properties:
+      "InstanceId": { "Ref": "MyConnectInstance" }
+      "PhoneNumber": { "Ref": "InboundPhoneNumber" }
+      PhoneNumberType: 'DID'
+      AutoAccept: false
+
+  MyContactFlow:
+    Type: 'AWS::Connect::ContactFlow'
+    Properties:
+      InstanceId: { "Ref": "MyConnectInstance" }
+      Name: 'PositionInQueueFlow'
+      Type: 'CONTACT_FLOW'
+      Content:
+        Name: 'PositionInQueueFlow'
+        Description: 'Contact flow to announce position in the queue'
+        Definition:
+          Start:
+            Type: 'Flow'
+            Branches:
+              - Condition: 'Success'
+                Destination: 'PositionPrompt'
+              - Condition: 'Failure'
+                Destination: 'QueueWaitPrompt'
+          PositionPrompt:
+            Type: 'PlayPrompt'
+            Prompt:
+              Type: 'PlainText'
+              Text: 'You are currently number {QueuePosition} in the queue. Please wait for the next available agent.'
+            Branches:
+              - Condition: 'Success'
+                Destination: 'Disconnect'
+              - Condition: 'Failure'
+                Destination: 'QueueWaitPrompt'
+          QueueWaitPrompt:
+            Type: 'PlayPrompt'
+            Prompt:
+              Type: 'PlainText'
+              Text: 'Please wait for the next available agent.'
+            Branches:
+              - Condition: 'Success'
+                Destination: 'Disconnect'
+          Disconnect:
+            Type: 'Disconnect'
+
+  MyPostContactSurveyFlow:
+    Type: 'AWS::Connect::ContactFlow'
+    Properties:
+      InstanceId: { "Ref": "MyConnectInstance" }
+      Name: 'PostContactSurveyFlow'
+      Type: 'DISCONNECT'
+      Content:
+        Name: 'PostContactSurveyFlow'
+        Description: 'Contact flow for post-contact survey'
+        Definition:
+          Start:
+            Type: 'Flow'
+            Branches:
+              - Condition: 'Always'
+                Destination: 'SurveyQuestion1'
+          SurveyQuestion1:
+            Type: 'GetCustomerInput'
+            Name: 'SurveyQuestion1'
+            Prompt:
+              Type: 'PlainText'
+              Text: 'On a scale of 1 to 5, how satisfied are you with the service?'
+            MaxDigits: 1
+            DefaultValue: 1
+            ValidDigits: '1,2,3,4,5'
+            Branches:
+              - Condition: 'Success'
+                Destination: 'SurveyQuestion2'
+              - Condition: 'Failure'
+                Destination: 'SurveyQuestion1'
+          SurveyQuestion2:
+            Type: 'GetCustomerInput'
+            Name: 'SurveyQuestion2'
+            Prompt:
+              Type: 'PlainText'
+              Text: 'On a scale of 1 to 5, how likely are you to recommend our service?'
+            MaxDigits: 1
+            DefaultValue: 1
+            ValidDigits: '1,2,3,4,5'
+            Branches:
+              - Condition: 'Success'
+                Destination: 'SurveyQuestion3'
+              - Condition: 'Failure'
+                Destination: 'SurveyQuestion2'
+          SurveyQuestion3:
+            Type: 'GetCustomerInput'
+            Name: 'SurveyQuestion3'
+            Prompt:
+              Type: 'PlainText'
+              Text: 'On a scale of 1 to 5, how would you rate the overall experience?'
+            MaxDigits: 1
+            DefaultValue: 1
+            ValidDigits: '1,2,3,4,5'
+            Branches:
+              - Condition: 'Success'
+                Destination: 'ThankYou'
+              - Condition: 'Failure'
+                Destination: 'SurveyQuestion3'
+          ThankYou:
+            Type: 'Disconnect'
